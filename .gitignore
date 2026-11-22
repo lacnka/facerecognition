@@ -1,0 +1,24 @@
+# Face data and personal settings: never commit these (this repository is public)
+faces.pkl
+thumbs/
+clips/
+snaps/
+sorted/
+backups/
+sentinel_config.json
+attendance.csv
+report.html
+wishlist.json
+secretsanta.json
+
+# Downloaded models (about 40 MB, fetched automatically on first use)
+models/
+
+# EV3 saved settings (contains the shared token) and test pictures
+.sentinel_ev3.json
+test.jpg
+t_*.jpg
+
+# Python
+__pycache__/
+*.pyc
