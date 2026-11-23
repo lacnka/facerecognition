@@ -1,7 +1,8 @@
 # ONE micro:bit  -  DOORBELL, plugged into your PC by USB (no radio, no second micro:bit)
 # Paste into https://python.microbit.org and flash, then leave it plugged into the PC.
 #
-# Button A = doorbell. It writes "RING" to the USB serial port; sentinel.py (on the PC) answers with:
+# Button A = doorbell. It writes "RING" to the USB serial port (and "HB" every 2 s so sentinel.py can tell
+# the link is alive and reopen the port if it ever goes quiet). sentinel.py answers a ring with:
 #   SCAN        -> animation while the EV3 scans your face
 #   HELLO:name  -> two-tone beep, then scrolls "Hello name"
 #   UNKNOWN     -> low beep and an X
@@ -54,9 +55,14 @@ display.clear()
 waiting = False
 started = 0
 last_frame = 0
+last_hb = 0
 i = 0
 
 while True:
+    if running_time() - last_hb > 2000:
+        uart.write("HB\n")                  # heartbeat: tells the PC this link is alive
+        last_hb = running_time()
+
     if button_a.was_pressed() and not waiting:
         uart.write("RING\n")
         waiting = True

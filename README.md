@@ -62,6 +62,10 @@ Why the PC does the matching: the EV3 (300 MHz ARM9, 64 MB RAM) is far too slow 
 
 Commands: `ext` (status), `ext on|off`, `ext log` (recent doorbell events).
 
+The micro:bit sends a heartbeat (`HB`) every 2 seconds. If SENTINEL hears nothing for 8 seconds it closes and
+reopens the serial port by itself, so a stuck link no longer needs a replug. This watchdog only arms once the
+first heartbeat has been seen, so an older micro:bit program without heartbeat keeps working.
+
 ### Settings
 
 | Setting | Default | Meaning |
@@ -78,7 +82,8 @@ Commands: `ext` (status), `ext on|off`, `ext log` (recent doorbell events).
 |---|---|
 | `!` on the micro:bit | The EV3 could not reach the PC, or its webcam failed. Read the EV3 console. |
 | `no EV3 in standby` | The EV3 script isn't running, or its PC IP is wrong. |
-| `gateway micro:bit not found` | Replug the micro:bit, or `set ext_serial COM5`. |
+| `micro:bit not found` | Replug the micro:bit, or `set ext_serial COM5`. |
+| `no heartbeat from the micro:bit ... reopening the port` | Normal self-repair: the micro:bit sends `HB` every 2 s and SENTINEL reopens the port if it goes quiet for 8 s (after 3 failures it sends a serial break to reset the board). |
 | `rejected a connection (wrong token)` | The token differs between `ext_token` and the EV3. |
 | Black webcam pictures (frames of about 5 KB) | Raise `SKIP` in the EV3 script: a freshly opened webcam needs time to set its exposure. The script already retries a black picture once with a longer wait. |
 | `ssh` to `ev3dev.local` times out | Use the EV3's IP address instead of the name. |

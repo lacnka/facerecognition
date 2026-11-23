@@ -2318,8 +2318,10 @@ def cmd_globe(core, arg):
 # =============================================================================
 EXT_LOG = os.path.join(CLIPS_DIR, "doorbell_log.csv")
 EXT_START_TIMEOUT = 12.0     # seconds the EV3 gets to start scanning after a ring
+SERIAL_SILENCE = 8.0         # no heartbeat ("HB") from the micro:bit for this long -> close and reopen its port
+SERIAL_QUIET_AFTER_TX = 15.0  # ...but not right after we sent it an answer (its display is busy scrolling)
 _ext = {"srv": None, "thread": None, "ser_thread": None, "stop": None, "engine": None,
-        "ser": None, "port": None, "standby": [], "busy": False, "answered": False, "ring_id": 0}
+        "ser": None, "port": None, "standby": [], "busy": False, "answered": False, "ring_id": 0, "last_tx": 0.0}
 _ext_lock = threading.Lock()       # guards the fields above
 _ser_lock = threading.Lock()       # guards writes to the gateway
 
@@ -2394,6 +2396,7 @@ def ext_tell_microbit(text):
     try:
         with _ser_lock:
             ser.write((text + "\n").encode())
+        _ext["last_tx"] = time.time()
         return True
     except Exception as e:
         say("err", f"gateway micro:bit write failed: {e}")
@@ -2442,18 +2445,22 @@ def ext_ring():
 
 
 def _ext_serial_loop(stop):
+    """Read the micro:bit's USB serial port. It sends "RING" on a press and "HB" (heartbeat) every 2 s.
+    If the heartbeat stops, the port is closed and reopened (and after 3 failures in a row a serial break
+    is sent, which resets the micro:bit). The watchdog only arms once this micro:bit has sent an "HB",
+    so an old program without heartbeat just keeps working."""
     try:
         import serial
         import serial.tools.list_ports as lp
     except ImportError:
         return say("err", f"the doorbell needs pyserial:  {WHITE}pip install pyserial{RESET}   then:  ext on")
-    warned = False
+    warned, fails, hb_capable = False, 0, False   # hb_capable: this micro:bit has sent "HB" at least once
     while not stop.is_set():
         pref = str(load_cfg().get("ext_serial", "auto"))
         port = pref if pref != "auto" else next((p.device for p in lp.comports() if p.vid == 0x0D28), None)  # 0x0D28 = micro:bit
         if not port:
             if not warned:
-                say("warn", f"gateway micro:bit not found - plug it into this PC (or: {WHITE}set ext_serial COM5{RESET})")
+                say("warn", f"micro:bit not found - plug it into this PC (or: {WHITE}set ext_serial COM5{RESET})")
                 warned = True
             stop.wait(3)
             continue
@@ -2467,19 +2474,42 @@ def _ext_serial_loop(stop):
             continue
         warned = False
         _ext["ser"], _ext["port"] = ser, port
-        say("ok", f"gateway micro:bit connected on {WHITE}{port}{RESET}")
+        say("ok", f"micro:bit connected on {WHITE}{port}{RESET}")
+        last_rx, stale = time.time(), False
         try:
             while not stop.is_set():
-                if ser.readline().decode("utf-8", "ignore").strip() == "RING":
-                    ext_ring()
+                line = ser.readline().decode("utf-8", "ignore").strip()
+                now = time.time()
+                if line:
+                    last_rx = now
+                    if line == "HB":
+                        hb_capable, fails = True, 0
+                    elif line == "RING":
+                        ext_ring()
+                elif (hb_capable and now - last_rx > SERIAL_SILENCE and not _ext["busy"]
+                      and now - _ext["last_tx"] > SERIAL_QUIET_AFTER_TX):
+                    stale = True
+                    break
         except (OSError, serial.SerialException):
-            say("warn", "gateway micro:bit disconnected")
+            say("warn", "micro:bit disconnected")
+            hb_capable, fails = False, 0            # unplugged: it may come back with a different program
         finally:
             _ext["ser"], _ext["port"] = None, None
+            if stale:
+                fails += 1
+                say("warn", f"no heartbeat from the micro:bit for {SERIAL_SILENCE:.0f}s - reopening the port")
+                if fails >= 3:
+                    try:
+                        ser.send_break(0.25)
+                        say("warn", "still silent - sent a serial break to reset the micro:bit")
+                    except Exception:
+                        pass
             try:
                 ser.close()
             except Exception:
                 pass
+        if stale:
+            stop.wait(1.0)
 
 
 # ---- EV3 over Wi-Fi ----------------------------------------------------------------------
