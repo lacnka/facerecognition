@@ -80,7 +80,7 @@ Commands: `ext` (status), `ext on|off`, `ext log` (recent doorbell events).
 | `no EV3 in standby` | The EV3 script isn't running, or its PC IP is wrong. |
 | `gateway micro:bit not found` | Replug the micro:bit, or `set ext_serial COM5`. |
 | `rejected a connection (wrong token)` | The token differs between `ext_token` and the EV3. |
-| Black webcam pictures | Raise `SKIP_COLD` in the EV3 script: the webcam needs time to set its exposure. |
+| Black webcam pictures (frames of about 5 KB) | Raise `SKIP` in the EV3 script: a freshly opened webcam needs time to set its exposure. The script already retries a black picture once with a longer wait. |
 | `ssh` to `ev3dev.local` times out | Use the EV3's IP address instead of the name. |
 
 ## Privacy and safety

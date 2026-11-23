@@ -39,8 +39,8 @@ PC_PORT = 5055                 # same as sentinel.py setting ext_port
 TOKEN = "change-me"            # same as sentinel.py setting ext_token (set ext_token <secret>)
 CAM_RES = "640x480"
 CAM_PALETTE = "MJPEG"          # YUYV also worked; MJPEG gave the sharpest 640x480 picture
-SKIP_COLD = 30                 # frames to skip when the webcam has been idle (fewer = black picture)
-SKIP_WARM = 10                 # frames to skip right after a previous capture
+SKIP = 30                      # frames to skip before every picture (too few = black picture)
+BLACK_KB = 10                  # a black 640x480 JPEG is ~5 KB, a real one 20+ KB: smaller means "retry"
 CONF_PATH = os.path.expanduser("~/.sentinel_ev3.json")
 SCAN_SECONDS = 12.0             # how long to keep trying after a ring
 FRAME_PATH = "/tmp/sentinel_frame.jpg"
@@ -104,21 +104,21 @@ def beep(ok):
         tone(220, 450)
 
 
-_last_grab = [0.0]
-
-
 def grab():
-    """One JPEG from the USB webcam. A webcam that has been idle needs ~30 frames to wake up and set its
-    exposure (a short wait gives a black picture); right after a capture a short wait is enough."""
-    cold = time.time() - _last_grab[0] > 20
-    skip = SKIP_COLD if cold else SKIP_WARM
-    subprocess.run(["fswebcam", "-q", "-r", CAM_RES, "-p", CAM_PALETTE, "--no-banner", "--skip", str(skip),
-                    "--jpeg", "85", FRAME_PATH],
-                   check=True, timeout=40, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    _last_grab[0] = time.time()
-    with open(FRAME_PATH, "rb") as f:
-        data = f.read()
-    print("  frame: %d KB (skip %d)" % (len(data) // 1024, skip))
+    """One JPEG from the USB webcam. fswebcam reopens the camera for every picture, and a freshly opened
+    webcam gives black frames until its auto-exposure settles, so every picture skips SKIP frames first.
+    If the picture still looks black, try once more with twice the wait."""
+    data = b""
+    for skip in (SKIP, SKIP * 2):
+        subprocess.run(["fswebcam", "-q", "-r", CAM_RES, "-p", CAM_PALETTE, "--no-banner", "--skip", str(skip),
+                        "--jpeg", "85", FRAME_PATH],
+                       check=True, timeout=60, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        with open(FRAME_PATH, "rb") as f:
+            data = f.read()
+        kb = len(data) // 1024
+        print("  frame: %d KB (skip %d)%s" % (kb, skip, "" if kb >= BLACK_KB else " - looks black, retrying"))
+        if kb >= BLACK_KB:
+            break
     return data
 
 

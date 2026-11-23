@@ -57,7 +57,8 @@ micro:bit --USB serial--> sentinel.py <--TCP over the hotspot--> EV3 + webcam
 | 4 | `ssh robot@ev3dev.local` timed out | The `.local` name resolved to something unreachable | Use the EV3's IP address |
 | 5 | `apt-get update` failed with 404s on the EV3 | Debian stretch moved to `archive.debian.org` | Point `/etc/apt/sources.list` at the archive and disable the expiry check |
 | 6 | `ping` from the EV3 to the PC failed | Windows blocks ping on "public" networks, and a phone hotspot counts as public | Test the real TCP port instead (it connected) and allow Python on both profiles |
-| 7 | The webcam pictures were black | `fswebcam` skipped too few frames for the webcam to set its exposure | Skip 30 frames when the camera has been idle, 10 right after a capture; MJPEG format |
+| 7 | The webcam pictures were black | `fswebcam` skipped too few frames for the webcam to set its exposure | Skip 30 frames before every picture and use the MJPEG format |
+| 9 | The first ring worked but the next ring saw only black pictures (until the micro:bit was replugged, which wrongly looked like a micro:bit fault) | A first fix skipped only 10 frames when the previous capture was recent, but `fswebcam` reopens the camera for every picture, so the exposure restarts every time | Always skip 30 frames; a picture under 10 KB counts as black and is retried once with 60 |
 | 8 | Vietnamese names break the display and the log | The micro:bit font is ASCII only, and Windows CSV defaults are not UTF-8 | The micro:bit gets an ASCII version of the name (`Nguyễn Đức` becomes `Nguyen Duc`); the log keeps the full name in UTF-8 |
 
 ## How it was tested
